@@ -31,7 +31,9 @@
 uint16_t disp1_number;
 uint16_t disp2_number;
 FDCAN_TxHeaderTypeDef TxHeader;
+FDCAN_RxHeaderTypeDef RxHeader;
 uint8_t TxData[8];
+uint8_t RxData[8];
 uint32_t TxMailbox;
 
 /* USER CODE END PTD */
@@ -141,31 +143,7 @@ void HAL2_Delay(uint32_t Delay)
   }
 }
 
-void send_CAN(uint32_t msg_nr){
-
-	if(msg_nr == 0){
-		TxData[0] = 0x00;
-		TxData[1] = 0x03;
-		TxHeader.Identifier = 0x014002806;
-
-	}
-	if(msg_nr == 1){
-		TxData[0] = 0x00;
-		TxData[1] = 0x02;
-		TxHeader.Identifier = 0x014002806;
-
-	}
-	if(msg_nr == 2){
-		TxData[0] = 0x00;
-		TxData[1] = 0x01;
-		TxHeader.Identifier = 0x014002806;
-
-	}
-	if(msg_nr == 3){
-		TxData[0] = 0x00;
-		TxData[1] = 0x06;
-		TxHeader.Identifier = 0x014002906;
-	}
+void send_CAN(){
 
 	//HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, &TxData);
 	if(HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, TxData) != HAL_OK)
@@ -183,9 +161,42 @@ void send_CAN(uint32_t msg_nr){
   * @param  RxFifo0ITs indicates which Rx FIFO 0 interrupts are signalled.
   *         This parameter can be any combination of @arg FDCAN_Rx_Fifo0_Interrupts.
   */
+
+/**
+  * @brief  Rx FIFO 0 callback.
+  * @param  hfdcan pointer to an FDCAN_HandleTypeDef structure that contains
+  *         the configuration information for the specified FDCAN.
+  * @param  RxFifo0ITs indicates which Rx FIFO 0 interrupts are signaled.
+  *         This parameter can be any combination of @arg FDCAN_Rx_Fifo0_Interrupts.
+  * @retval None
+  */
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
 	HAL_GPIO_TogglePin(GPIOA,LED1_Pin);
+  if((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
+  {
+    /* Retrieve Rx messages from RX FIFO0 */
+	if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK)
+	{
+	  Error_Handler();
+	}
+	if(RxHeader.Identifier == 0x14002101){
+		uint16_t foo;
+		foo = (RxData[0] << 8) | RxData[1];
+		foo = foo>>7;
+		disp1_number = foo;
+	}
+	if(RxHeader.Identifier == 0x14008201){
+			uint16_t foo;
+			foo = (RxData[0] << 8) | RxData[1];
+			foo = foo>>7;
+			disp2_number = foo;
+		}
+
+
+
+
+  }
 }
 
 /* USER CODE END 0 */
@@ -220,8 +231,8 @@ int main(void)
   MX_GPIO_Init();
   MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
-  uint8_t a = 0;
-  uint8_t b = 0;
+  //uint8_t a = 0;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -231,17 +242,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  a++;
-	  disp1_number = a;
-	  disp2_number = a;
-	  HAL2_Delay(600);
-	  if(!(a % 20)){
-		  send_CAN(b);
-		  b++;
-		  if(b == 4){
-			  b = 0;
-		  }
-	  }
+	//  a++;
+
+	  //disp1_number = a;
+	 // disp2_number = a;
+	  HAL2_Delay(1000);
+	  HAL_GPIO_TogglePin(GPIOA,LED2_Pin);
+	 // if(!(a % 20)){
+	//	  //send_CAN();
+	//	  HAL_GPIO_TogglePin(GPIOA,LED2_Pin);
+	 // }
   }
   /* USER CODE END 3 */
 }
@@ -310,11 +320,11 @@ static void MX_FDCAN1_Init(void)
   /* USER CODE BEGIN FDCAN1_Init 0 */
 	FDCAN_FilterTypeDef sFilterConfig;
 		/* Configure Rx filter */
+		sFilterConfig.FilterConfig = FDCAN_FILTER_DISABLE;
 		sFilterConfig.IdType = FDCAN_STANDARD_ID;
 		sFilterConfig.FilterIndex = 0;
 		sFilterConfig.FilterType = FDCAN_FILTER_MASK;
-		sFilterConfig.FilterConfig = FDCAN_FILTER_DISABLE;
-		sFilterConfig.FilterID1 = 0x701;
+		sFilterConfig.FilterID1 = 0x000;
 		sFilterConfig.FilterID2 = 0x7FF;
   /* USER CODE END FDCAN1_Init 0 */
 
@@ -349,7 +359,7 @@ static void MX_FDCAN1_Init(void)
   		Error_Handler();
   	}
 
-  	if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE,FDCAN_IT_TX_COMPLETE) != HAL_OK){
+  	if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE,0) != HAL_OK){
   	  Error_Handler();
     }
 
