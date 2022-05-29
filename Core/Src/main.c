@@ -106,15 +106,20 @@ void display_number(uint16_t number,uint8_t divisor,uint8_t display){
 	}else{
 		HAL_GPIO_WritePin(GPIOA,DIG1_2_Pin,GPIO_PIN_SET);
 	}
+
 	digit = (number/10) % 10;
+
 	GPIOA->ODR = (uint32_t)(((uint32_t)!0b00111111) & GPIOA->ODR);
-	display_digit(digit,0);
 	if(display == 1){
+		display_digit(digit,1);
 		HAL_GPIO_WritePin(GPIOA,DIG2_1_Pin,GPIO_PIN_SET);
 	}else{
+		display_digit(digit,0);
 		HAL_GPIO_WritePin(GPIOA,DIG2_2_Pin,GPIO_PIN_SET);
 	}
+
 	digit = (number/100) % 10;
+
 	GPIOA->ODR = (uint32_t)(((uint32_t)!0b00111111) & GPIOA->ODR);
 	display_digit(digit,0);
 	if(display == 1){
@@ -180,21 +185,36 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 	{
 	  Error_Handler();
 	}
-	if(RxHeader.Identifier == 0x14002101){
-		uint16_t foo;
-		foo = (RxData[0] << 8) | RxData[1];
-		foo = foo>>7;
-		disp1_number = foo;
-	}
-	if(RxHeader.Identifier == 0x14008201){
-			uint16_t foo;
-			foo = (RxData[0] << 8) | RxData[1];
-			foo = foo>>7;
-			disp2_number = foo;
+	if(RxHeader.Identifier == 0x1B030141){
+		// https://github.com/Cougar/HomeAutomation/blob/f2951eb0619c6122b6983275e1e698570eed4b5a/branches/modules/EmbeddedSoftware/AVR/module/sns_ds18x20/sns_ds18x20.c
+		// - cel full celsius
+		// - fractions of celsius in millicelsius*(10^-1)/625 (the 4 LS-Bits)
+
+		//This code won't work with negative numbers
+		uint16_t in_temp;
+		uint16_t full_cel;
+		uint16_t cel_frac_bits;
+		uint16_t cel_frac;
+
+		in_temp        = (RxData[1] << 8) | RxData[2];
+		full_cel       = (in_temp & 0b1111111111000000) >> 6;
+		cel_frac_bits  = (in_temp & 0b000000000000111111) >> 2;
+		cel_frac       = cel_frac_bits*625; //fractional parts of the temperature, in integer form
+		cel_frac       = cel_frac/1000;
+		if(cel_frac > 9){
+			disp2_number = 88;
+		}else{
+			disp2_number = 11;
 		}
 
+		disp1_number   = (full_cel * 10) + cel_frac;
 
-
+	}
+	if(RxHeader.Identifier == 0x14002101){
+		uint16_t foo; //Possible loss with signed values
+		foo = (RxData[1] << 8) | RxData[2];
+	//	disp2_number = (foo & 0b1111111111000000) >> 6;
+	}
 
   }
 }
